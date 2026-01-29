@@ -21,24 +21,42 @@ namespace Azure.ResourceManager.PostgreSql.Tests
 {
     public class PostgreSqlFlexibleServerTests: PostgreSqlManagementTestBase
     {
-        public PostgreSqlFlexibleServerTests(bool isAsync) : base(isAsync)//, RecordedTestMode.Record)
+        public PostgreSqlFlexibleServerTests(bool isAsync) : base(isAsync, RecordedTestMode.Live)
         {
         }
+
+        private string GetRandomSkuName()
+        {
+            var skuOptions = new[]
+            {
+                "Standard_D4ds_v4",
+                "Standard_D4ds_v5",
+                "Standard_D4ads_v5",
+                "Standard_D2ds_v5",
+                "Standard_D2ds_v4"
+            };
+            return skuOptions[Recording.Random.Next(skuOptions.Length)];
+        }
+
+        private const string resourceGroupName = "pgflexnetrg";
+        private const string administratorLogin = "testUser";
+        private const string administratorLoginPassword = "testPassword1!";
+        private const string defaultVersion = "18";
 
         [TestCase]
         [RecordedTest]
         public async Task CreateGetList()
         {
             // Create
-            ResourceGroupResource rg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.EastUS);
+            ResourceGroupResource rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaCentral);
             PostgreSqlFlexibleServerCollection serverCollection = rg.GetPostgreSqlFlexibleServers();
             string serverName = Recording.GenerateAssetName("pgflexserver");
             var data = new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D4s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
-                Version = "13",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
+                Version = defaultVersion,
                 Storage = new PostgreSqlFlexibleServerStorage() {StorageSizeInGB = 128},
                 CreateMode = PostgreSqlFlexibleServerCreateMode.Create,
                 Backup = new PostgreSqlFlexibleServerBackupProperties()
@@ -66,15 +84,15 @@ namespace Azure.ResourceManager.PostgreSql.Tests
         public async Task CreateUpdateGetDelete()
         {
             // Create
-            ResourceGroupResource rg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.EastUS);
+            ResourceGroupResource rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaCentral);
             PostgreSqlFlexibleServerCollection serverCollection = rg.GetPostgreSqlFlexibleServers();
             string serverName = Recording.GenerateAssetName("pgflexserver");
             var data = new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D4s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
-                Version = "13",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
+                Version = defaultVersion,
                 Storage = new PostgreSqlFlexibleServerStorage() { StorageSizeInGB = 128 },
                 CreateMode = PostgreSqlFlexibleServerCreateMode.Create,
                 Backup = new PostgreSqlFlexibleServerBackupProperties()
@@ -107,14 +125,14 @@ namespace Azure.ResourceManager.PostgreSql.Tests
         public async Task CreateUpdateGetDeleteNonPremiumSSD()
         {
             // Create
-            ResourceGroupResource rg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.EastUS);
+            ResourceGroupResource rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaCentral);
             PostgreSqlFlexibleServerCollection serverCollection = rg.GetPostgreSqlFlexibleServers();
             string serverName = Recording.GenerateAssetName("pgflexserverssdv2");
             var data = new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D4s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
                 Version = "16",
                 Storage = new PostgreSqlFlexibleServerStorage(128, null, null, 3000, 125, PostgreSqlFlexibleServersStorageType.PremiumV2LRS, null),
                 CreateMode = PostgreSqlFlexibleServerCreateMode.Create,
@@ -158,6 +176,51 @@ namespace Azure.ResourceManager.PostgreSql.Tests
 
         [TestCase]
         [RecordedTest]
+        public async Task CreateUpdateGetDeleteElasticCluster()
+        {
+            // Create
+            ResourceGroupResource rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaCentral);
+            PostgreSqlFlexibleServerCollection serverCollection = rg.GetPostgreSqlFlexibleServers();
+            string serverName = Recording.GenerateAssetName("pgelasticcluster");
+            var data = new PostgreSqlFlexibleServerData(rg.Data.Location)
+            {
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
+                Version = defaultVersion,
+                Storage = new PostgreSqlFlexibleServerStorage() { StorageSizeInGB = 128 },
+                CreateMode = PostgreSqlFlexibleServerCreateMode.Create,
+                Backup = new PostgreSqlFlexibleServerBackupProperties()
+                {
+                    BackupRetentionDays = 7
+                },
+                Network = new PostgreSqlFlexibleServerNetwork(),
+                HighAvailability = new PostgreSqlFlexibleServerHighAvailability() { Mode = PostgreSqlFlexibleServerHighAvailabilityMode.Disabled },
+                Cluster = new Cluster()
+                {
+                    ClusterSize = 3,
+                },
+            };
+            var lro = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, serverName, data);
+            PostgreSqlFlexibleServerResource server = lro.Value;
+            Assert.AreEqual(serverName, server.Data.Name);
+            // Update
+            lro = await server.UpdateAsync(WaitUntil.Completed, new PostgreSqlFlexibleServerPatch()
+            {
+                Tags = {{"key", "value"}}
+            });
+            PostgreSqlFlexibleServerResource serverFromUpdate = lro.Value;
+            Assert.AreEqual(serverName, serverFromUpdate.Data.Name);
+            Assert.AreEqual("value", serverFromUpdate.Data.Tags["key"]);
+            // Get
+            PostgreSqlFlexibleServerResource serverFromGet = await serverFromUpdate.GetAsync();
+            Assert.AreEqual(serverName, serverFromGet.Data.Name);
+            // Delete
+            await serverFromGet.DeleteAsync(WaitUntil.Completed);
+        }
+
+        [TestCase]
+        [RecordedTest]
         public async Task Restore()
         {
             var sourcePublicServerName = Recording.GenerateAssetName("pgflexserver");
@@ -170,15 +233,15 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             var sourceSubnetName = Recording.GenerateAssetName("subnet");
             var targetSubnetName = Recording.GenerateAssetName("subnet");
 
-            var rg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.EastUS);
+            var rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaCentral);
             var serverCollection = rg.GetPostgreSqlFlexibleServers();
 
             // Create public server
             var sourcePublicServerOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, sourcePublicServerName, new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D2s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
                 Version = PostgreSqlFlexibleServerVersion.Sixteen,
                 Storage = new PostgreSqlFlexibleServerStorage(128, null, null, null, null, null, null),
                 CreateMode = PostgreSqlFlexibleServerCreateMode.Create,
@@ -216,9 +279,9 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             // Create private server
             var sourcePrivateServerOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, sourcePrivateServerName, new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D2s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
                 Version = PostgreSqlFlexibleServerVersion.Sixteen,
                 Storage = new PostgreSqlFlexibleServerStorage(128, null, null, null, null, null, null),
                 Network = new PostgreSqlFlexibleServerNetwork()
@@ -294,17 +357,17 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             var targetVnetName = Recording.GenerateAssetName("vnet");
             var sourceSubnetName = Recording.GenerateAssetName("subnet");
             var targetSubnetName = Recording.GenerateAssetName("subnet");
-            var targetLocation = AzureLocation.WestUS;
+            var targetLocation = AzureLocation.CanadaEast;
 
-            var rg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.EastUS);
+            var rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaCentral);
             var serverCollection = rg.GetPostgreSqlFlexibleServers();
 
             // Create public server
             var sourcePublicServerOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, sourcePublicServerName, new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D2s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
                 Version = PostgreSqlFlexibleServerVersion.Sixteen,
                 Storage = new PostgreSqlFlexibleServerStorage(128, null, null, null, null, null, null),
                 Backup = new PostgreSqlFlexibleServerBackupProperties()
@@ -363,9 +426,9 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             // Create private server
             var sourcePrivateServerOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, sourcePrivateServerName, new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D2s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
                 Version = PostgreSqlFlexibleServerVersion.Sixteen,
                 Storage = new PostgreSqlFlexibleServerStorage(128, null, null, null, null, null, null),
                 Backup = new PostgreSqlFlexibleServerBackupProperties()
@@ -447,7 +510,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             var replicaSubnetName = new string[3];
             var virtualEndpointName = Recording.GenerateAssetName("vendpoint");
 
-            var rg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.EastUS);
+            var rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaCentral);
             var serverCollection = rg.GetPostgreSqlFlexibleServers();
 
             var replicaSubnetID = new ResourceIdentifier[3];
@@ -469,7 +532,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
                 var networkData = new VirtualNetworkData()
                 {
                     AddressPrefixes = { "10.0.0.0/16" },
-                    Location = AzureLocation.EastUS,
+                    Location = AzureLocation.CanadaCentral,
                     Subnets = {
                     new SubnetData()
                     {
@@ -521,9 +584,9 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             // Create source server
             var sourceServerData = new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D2s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
                 Version = PostgreSqlFlexibleServerVersion.Sixteen,
                 Storage = new PostgreSqlFlexibleServerStorage(128, null, null, null, null, null, null),
                 CreateMode = PostgreSqlFlexibleServerCreateMode.Create,
@@ -723,21 +786,16 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             await replica2Server.DeleteAsync(WaitUntil.Completed);
         }
 
-        [TestCase("11", "12")]
-        [TestCase("11", "13")]
-        [TestCase("11", "14")]
-        [TestCase("11", "15")]
-        [TestCase("11", "16")]
-        [TestCase("12", "13")]
-        [TestCase("12", "14")]
-        [TestCase("12", "15")]
-        [TestCase("12", "16")]
-        [TestCase("13", "14")]
-        [TestCase("13", "15")]
-        [TestCase("13", "16")]
         [TestCase("14", "15")]
         [TestCase("14", "16")]
+        [TestCase("14", "17")]
+        [TestCase("14", defaultVersion)]
         [TestCase("15", "16")]
+        [TestCase("15", "17")]
+        [TestCase("15", defaultVersion)]
+        [TestCase("16", "17")]
+        [TestCase("16", defaultVersion)]
+        [TestCase("17", defaultVersion)]
         [RecordedTest]
         public async Task MajorVersionUpgrade(string source, string dest)
         {
@@ -746,14 +804,14 @@ namespace Azure.ResourceManager.PostgreSql.Tests
 
             var serverName = Recording.GenerateAssetName("pgflexserver");
 
-            var rg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.EastUS);
+            var rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaCentral);
             var serverCollection = rg.GetPostgreSqlFlexibleServers();
 
             var serverOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, serverName, new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D2s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
                 Version = sourceVersion,
                 Storage = new PostgreSqlFlexibleServerStorage(128, null, null, null, null, null, null),
                 CreateMode = PostgreSqlFlexibleServerCreateMode.Create,
@@ -777,14 +835,14 @@ namespace Azure.ResourceManager.PostgreSql.Tests
         {
             var serverName = Recording.GenerateAssetName("pgflexserver");
 
-            var rg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.SouthCentralUS);
+            var rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.SouthCentralUS);
             var serverCollection = rg.GetPostgreSqlFlexibleServers();
 
             var serverOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, serverName, new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D2s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
                 Version = PostgreSqlFlexibleServerVersion.Sixteen,
                 Storage = new PostgreSqlFlexibleServerStorage(128, null, null, null, null, null, null),
                 CreateMode = PostgreSqlFlexibleServerCreateMode.Create,
@@ -835,7 +893,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             var replicaName = Recording.GenerateAssetName("pgflexserver");
             var restoreName = Recording.GenerateAssetName("pgflexserver");
 
-            var rg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.EastUS);
+            var rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaCentral);
             var serverCollection = rg.GetPostgreSqlFlexibleServers();
 
             // Create key and identity
@@ -845,9 +903,9 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             // Create server with data encryption
             var serverOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, serverName, new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D2s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
                 Version = PostgreSqlFlexibleServerVersion.Sixteen,
                 Storage = new PostgreSqlFlexibleServerStorage(128, null, null, null, null, null, null),
                 Identity = new PostgreSqlFlexibleServerUserAssignedIdentity(PostgreSqlFlexibleServerIdentityType.UserAssigned)
@@ -871,6 +929,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             // Create replica with same key and identity
             var replicaOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, replicaName, new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
                 SourceServerResourceId = server.Id,
                 AvailabilityZone = "2",
                 Identity = new PostgreSqlFlexibleServerUserAssignedIdentity(PostgreSqlFlexibleServerIdentityType.UserAssigned)
@@ -942,15 +1001,14 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             Assert.IsTrue(restore.Data.Identity.UserAssignedIdentities.ContainsKey(identity.Id));
         }
 
-        // Update to Microsoft Entra TODO
-        /* [TestCase]
+        [TestCase]
         [LiveOnly(alwaysRunLocally: false)]
         public async Task AAD()
         {
             var serverName = Recording.GenerateAssetName("pgflexserver");
             var replicaName = new string[2] { Recording.GenerateAssetName("pgflexserver"), Recording.GenerateAssetName("pgflexserver") };
 
-            var rg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.EastUS);
+            var rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaCentral);
             var serverCollection = rg.GetPostgreSqlFlexibleServers();
 
             // Get current client info
@@ -969,9 +1027,9 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             // Create main server
             var serverOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, serverName, new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D2s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
                 Version = PostgreSqlFlexibleServerVersion.Sixteen,
                 Storage = new PostgreSqlFlexibleServerStorage(128, null, null, null, null, null, null),
                 CreateMode = PostgreSqlFlexibleServerCreateMode.Create,
@@ -996,7 +1054,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             var firstReplica = replicaOperation.Value;
 
             // Add AAD admin to main server
-            await server.GetPostgreSqlFlexibleServerActiveDirectoryAdministrators().CreateOrUpdateAsync(WaitUntil.Completed, servicePrincipal.Id, new PostgreSqlFlexibleServerActiveDirectoryAdministratorCreateOrUpdateContent()
+            await server.GetPostgreSqlFlexibleServerMicrosoftEntraAdministrators().CreateOrUpdateAsync(WaitUntil.Completed, servicePrincipal.Id, new PostgreSqlFlexibleServerMicrosoftEntraAdministratorCreateOrUpdateContent()
             {
                 PrincipalName = servicePrincipal.DisplayName,
                 TenantId = tenantId,
@@ -1015,7 +1073,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             // Main server and both replicas should have AAD
             foreach (var s in new PostgreSqlFlexibleServerResource[] { server, firstReplica, secondReplica })
             {
-                var admin = (await s.GetPostgreSqlFlexibleServerActiveDirectoryAdministratorAsync(servicePrincipal.Id)).Value;
+                var admin = (await s.GetPostgreSqlFlexibleServerMicrosoftEntraAdministratorAsync(servicePrincipal.Id)).Value;
                 Assert.AreEqual(PostgreSqlFlexibleServerPrincipalType.ServicePrincipal, admin.Data.PrincipalType);
                 Assert.AreEqual(servicePrincipal.DisplayName, admin.Data.PrincipalName);
                 Assert.AreEqual(servicePrincipal.Id, admin.Data.ObjectId.ToString());
@@ -1049,10 +1107,10 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             var geoKeyName = Recording.GenerateAssetName("key");
             var identityName = Recording.GenerateAssetName("identity");
             var geoIdentityName = Recording.GenerateAssetName("identity");
-            var targetLocation = AzureLocation.WestUS;
+            var targetLocation = AzureLocation.CanadaEast;
 
-            var rg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.EastUS);
-            var geoRg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.WestUS);
+            var rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaCentral);
+            var geoRg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaEast);
             var serverCollection = rg.GetPostgreSqlFlexibleServers();
 
             // Create key and identity
@@ -1077,7 +1135,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             // Create main server
             var sourcePublicServerOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, sourcePublicServerName, new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D2s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
                 Version = PostgreSqlFlexibleServerVersion.Sixteen,
                 Storage = new PostgreSqlFlexibleServerStorage(128, StorageAutoGrow.Disabled, null, null, null, null, null),
                 Backup = new PostgreSqlFlexibleServerBackupProperties()
@@ -1149,7 +1207,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             #endregion
 
             //Add AAD admin to main server
-            await sourcePublicServer.GetPostgreSqlFlexibleServerActiveDirectoryAdministrators().CreateOrUpdateAsync(WaitUntil.Completed, servicePrincipal.Id, new PostgreSqlFlexibleServerActiveDirectoryAdministratorCreateOrUpdateContent()
+            await sourcePublicServer.GetPostgreSqlFlexibleServerMicrosoftEntraAdministrators().CreateOrUpdateAsync(WaitUntil.Completed, servicePrincipal.Id, new PostgreSqlFlexibleServerMicrosoftEntraAdministratorCreateOrUpdateContent()
             {
                 PrincipalName = servicePrincipal.DisplayName,
                 TenantId = tenantId,
@@ -1167,13 +1225,13 @@ namespace Azure.ResourceManager.PostgreSql.Tests
 
             // Since CMK is not explicitly enabled, identity will be null for this replica server.
             Assert.IsNull(secondReplica.Data.Identity);
-            Assert.AreEqual(secondReplica.Data.Location.Name, AzureLocation.WestUS.Name);
+            Assert.AreEqual(secondReplica.Data.Location.Name, AzureLocation.CanadaEast.Name);
             #endregion
 
             // Main server and both replicas should have AAD
             foreach (var s in new PostgreSqlFlexibleServerResource[] { sourcePublicServer, firstReplica, secondReplica })
             {
-                var admin = (await s.GetPostgreSqlFlexibleServerActiveDirectoryAdministratorAsync(servicePrincipal.Id)).Value;
+                var admin = (await s.GetPostgreSqlFlexibleServerMicrosoftEntraAdministratorAsync(servicePrincipal.Id)).Value;
                 Assert.AreEqual(PostgreSqlFlexibleServerPrincipalType.ServicePrincipal, admin.Data.PrincipalType);
                 Assert.AreEqual(servicePrincipal.DisplayName, admin.Data.PrincipalName);
                 Assert.AreEqual(servicePrincipal.Id, admin.Data.ObjectId.ToString());
@@ -1251,7 +1309,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             Assert.AreEqual(PostgreSqlFlexibleServerActiveDirectoryAuthEnum.Enabled, sourcePublicServer.Data.AuthConfig.ActiveDirectoryAuth);
             Assert.AreEqual(PostgreSqlFlexibleServerPasswordAuthEnum.Disabled, sourcePublicServer.Data.AuthConfig.PasswordAuth);
 
-            var geoServerAdmin = (await targetPublicServer.GetPostgreSqlFlexibleServerActiveDirectoryAdministratorAsync(servicePrincipal.Id)).Value;
+            var geoServerAdmin = (await targetPublicServer.GetPostgreSqlFlexibleServerMicrosoftEntraAdministratorAsync(servicePrincipal.Id)).Value;
             Assert.AreEqual(PostgreSqlFlexibleServerPrincipalType.ServicePrincipal, geoServerAdmin.Data.PrincipalType);
             Assert.AreEqual(servicePrincipal.DisplayName, geoServerAdmin.Data.PrincipalName);
             Assert.AreEqual(servicePrincipal.Id, geoServerAdmin.Data.ObjectId.ToString());
@@ -1267,7 +1325,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             // Delete targhet geo-restored server
             await targetPublicServer.DeleteAsync(WaitUntil.Completed);
             #endregion
-        } */
+        }
 
         /// <summary>
         /// - Create resource groups for source server and target server in geo-paired locations
@@ -1294,18 +1352,18 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             var targetVnetName = Recording.GenerateAssetName("vnet");
             var sourceSubnetName = Recording.GenerateAssetName("subnet");
             var targetSubnetName = Recording.GenerateAssetName("subnet");
-            var targetLocation = AzureLocation.WestUS;
+            var targetLocation = AzureLocation.CanadaEast;
 
-            var rg = await CreateResourceGroupAsync(Subscription, "pgflexrg", AzureLocation.EastUS);
+            var rg = await CreateResourceGroupAsync(Subscription, resourceGroupName, AzureLocation.CanadaCentral);
             var serverCollection = rg.GetPostgreSqlFlexibleServers();
             #endregion
 
             #region Create public server
             var sourcePublicServerOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, sourcePublicServerName, new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D2ds_v4", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
                 Version = PostgreSqlFlexibleServerVersion.Sixteen,
                 Storage = new PostgreSqlFlexibleServerStorage(128, StorageAutoGrow.Disabled, null, null, null, null, null),
                 Backup = new PostgreSqlFlexibleServerBackupProperties()
@@ -1330,9 +1388,9 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             // Create private server
             var sourcePrivateServerOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, sourcePrivateServerName, new PostgreSqlFlexibleServerData(rg.Data.Location)
             {
-                Sku = new PostgreSqlFlexibleServerSku("Standard_D2s_v3", PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
-                AdministratorLogin = "testUser",
-                AdministratorLoginPassword = "testPassword1!",
+                Sku = new PostgreSqlFlexibleServerSku(GetRandomSkuName(), PostgreSqlFlexibleServerSkuTier.GeneralPurpose),
+                AdministratorLogin = administratorLogin,
+                AdministratorLoginPassword = administratorLoginPassword,
                 Version = PostgreSqlFlexibleServerVersion.Sixteen,
                 Storage = new PostgreSqlFlexibleServerStorage(128, null, null, null, null, null, null),
                 Backup = new PostgreSqlFlexibleServerBackupProperties()
@@ -1370,7 +1428,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             {
                 try
                 {
-                    var targetPublicServerOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, targetPublicServerName, new PostgreSqlFlexibleServerData(AzureLocation.EastUS)
+                    var targetPublicServerOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, targetPublicServerName, new PostgreSqlFlexibleServerData(AzureLocation.CanadaCentral)
                     {
                         SourceServerResourceId = sourcePublicServer.Id,
                         PointInTimeUtc = DateTime.Now,
@@ -1397,7 +1455,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             Assert.IsNotNull(targetPublicServer, $"Revive Dropped server {sourcePublicServerName} not available after 30 min.");
 
             Assert.AreEqual(targetPublicServerName, targetPublicServer.Data.Name);
-            Assert.AreEqual(AzureLocation.EastUS.Name, targetPublicServer.Data.Location.Name);
+            Assert.AreEqual(AzureLocation.CanadaCentral.Name, targetPublicServer.Data.Location.Name);
             Assert.AreEqual(PostgreSqlFlexibleServerPublicNetworkAccessState.Enabled, targetPublicServer.Data.Network.PublicNetworkAccess);
             // By default for Revive dropped, Geo backup is not enabled. Need to explicitly set Geo-backup as Enabled if you want revive dropped server to have Geo-backup as Enabled
             Assert.AreEqual(PostgreSqlFlexibleServerGeoRedundantBackupEnum.Disabled, targetPublicServer.Data.Backup.GeoRedundantBackup);
@@ -1405,7 +1463,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
 
             #region Revive-dropped private access server
             // Create target vnet and subnet in paired region
-            var (targetVnetID, targetSubnetID) = await CreateVirtualNetwork(targetVnetName, targetSubnetName, rg.Data.Name, AzureLocation.EastUS);
+            var (targetVnetID, targetSubnetID) = await CreateVirtualNetwork(targetVnetName, targetSubnetName, rg.Data.Name, AzureLocation.CanadaCentral);
 
             // Create target private DNS zone and virtual link
             var targetPrivateDnsZone = await CreatePrivateDnsZone(targetPrivateServerName, targetVnetID, rg.Data.Name);
@@ -1416,7 +1474,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             {
                 try
                 {
-                    var targetPrivateServerOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, targetPrivateServerName, new PostgreSqlFlexibleServerData(AzureLocation.EastUS)
+                    var targetPrivateServerOperation = await serverCollection.CreateOrUpdateAsync(WaitUntil.Completed, targetPrivateServerName, new PostgreSqlFlexibleServerData(AzureLocation.CanadaCentral)
                     {
                         Network = new PostgreSqlFlexibleServerNetwork()
                         {
@@ -1448,7 +1506,7 @@ namespace Azure.ResourceManager.PostgreSql.Tests
             Assert.IsNotNull(targetPrivateServer, $"Revive-dropped not available for server {sourcePrivateServerName} after 30 min. Failed to create server {targetPrivateServerName}");
 
             Assert.AreEqual(targetPrivateServerName, targetPrivateServer.Data.Name);
-            Assert.AreEqual(AzureLocation.EastUS.Name, targetPrivateServer.Data.Location.Name);
+            Assert.AreEqual(AzureLocation.CanadaCentral.Name, targetPrivateServer.Data.Location.Name);
             Assert.AreEqual(targetSubnetID, targetPrivateServer.Data.Network.DelegatedSubnetResourceId);
             Assert.AreEqual(targetPrivateDnsZone.Id, targetPrivateServer.Data.Network.PrivateDnsZoneArmResourceId);
             Assert.AreEqual(PostgreSqlFlexibleServerPublicNetworkAccessState.Disabled, targetPrivateServer.Data.Network.PublicNetworkAccess);
